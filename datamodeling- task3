@@ -1,4 +1,7 @@
-dimension table
+1. ER Diagram
+you can refer ER.drawio.png
+
+2.dimension table
 
 -- Site Dimension
 CREATE TABLE IF NOT EXISTS dataworkspace.default.dim_site (
