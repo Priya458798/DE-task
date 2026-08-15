@@ -1,0 +1,36 @@
+URL --https://adb-7405605232295703.3.azuredatabricks.net/editor/notebooks/3145725167759340?o=7405605232295703
+
+
+1. Pipeline DAG & Dependency Management
+The pipeline is modeled as a Directed Acyclic Graph (DAG) where tasks run strictly upon the successful upstream completion of preceding stages.
+Sensor / Trigger Task: Uses FileSensor or Azure Blob storage triggers to verify that new batch files are available before triggering compute resources.
+Upstream/Downstream Enforcements: task_gold_aggregations will only execute if task_silver_clean_etl passes successfully (all_success trigger rule).
+Branching & Parallel Execution: Clean data transformations and Quarantine/Quality audit reporting execute in parallel to prevent reporting bottlenecks.
+
+2. Failure Handling Strategy
+Dead Letter Routing & Quarantine: Corrupt records and null-value violations do not fail the entire orchestration run;
+they are diverted to quarantine_telemetry to preserve downstream SLA timelines.
+Task-Level Circuit Breaking:
+  Raw ingestion files are missing or unreadable.
+  Cluster compute initialization fails.
+  Data quality violation rate exceeds a critical threshold (e.g., $> 10\%$ invalid records).
+State Isolation: Incomplete transactions are rolled back via Delta Lake ACID transaction logs, ensuring no dirty or partial data is exposed in Gold tables.
+
+
+3. Retry Mechanisms
+Exponential Backoff: Transient network timeouts, cloud API throttling, or storage availability blips trigger automated retries with increasing wait times:
+retries: 3
+retry_delay: timedelta(minutes=2)
+retry_exponential_backoff: True
+max_retry_delay: timedelta(minutes=15)
+Idempotency: All write operations use mode("overwrite") on partitions or MERGE INTO (Upsert) operations so that re-running a failed task does not create duplicate rows.
+
+4.Alerting & Notification Strategy
+Severity-Based Notification Matrix:
+Critical (P1 - Pipeline Failure / Compute Crash): Immediate PagerDuty incident creation and SMS/Call dispatch to the on-call Data Engineer.
+Warning (P2 - SLA Miss / High Quarantine Rate): Webhook dispatch to the engineering Slack/Microsoft Teams channel #iot-pipeline-alerts.
+Info (P3 - Daily Quality Report Summary): Automated daily email digest to business stakeholders containing total processed volume and validation pass rates.
+Airflow Callbacks Configuration:
+on_failure_callback: Sends error payload (task name, execution date, exception stack trace, log URL) to Slack webhook.
+sla_miss_callback: Notifies team if the hourly batch execution exceeds 15 minutes.
+
