@@ -1,0 +1,15 @@
+Architecture diagram - data architecture design.png
+
+End-to-End pipeline
+
+Ingestion: 
+  Edge IoT sensors stream high-frequency readings (power, temperature, pressure, vibration) and event logs via MQTT/HTTPS into a distributed message broker (Apache Kafka / Amazon Kinesis).
+
+Processing & Medallion Storage (Delta Lake on S3):
+  Bronze Layer (Raw Data): Spark Structured Streaming / micro-batch jobs ingest raw JSON/CSV payloads directly into S3 as immutable raw Delta tables.
+  Silver Layer (Cleaned & Validated Data): Data is parsed, deduplicated on (timestamp, asset_id, sensor_id), null-checked, timestamp-standardized, and validated against asset metadata.
+  Gold Layer (Aggregated Business Data): Computes business KPIs, hourly rollups (fact_energy_hourly), asset utilization rates, and multi-level aggregations (Asset, Building, Site levels).
+
+Serving & Consumption:
+  BI & Analytics: Curated Gold tables are queried by Power BI (via DirectQuery/Databricks SQL) or synchronized into Snowflake for executive reporting.
+  AI / Machine Learning: Data scientists consume cleansed time-series features directly from the Silver layer into Amazon SageMaker / Databricks MLflow for predictive maintenance, remaining useful life (RUL) estimation, and anomaly detection models.
