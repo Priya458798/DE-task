@@ -1,0 +1,59 @@
+link URL --https://adb-7405605232295703.3.azuredatabricks.net/editor/notebooks/2263818388948000?o=7405605232295703
+
+● Retrieve all assets under a site. 
+
+WITH RECURSIVE site_hierarchy AS (
+    SELECT child_id AS asset_id, 1 AS depth
+    FROM dataworkspace.default.asset_relationship
+    WHERE parent_id = 'Site-A'
+    
+    UNION ALL
+    
+    SELECT r.child_id, sh.depth + 1
+    FROM dataworkspace.default.asset_relationship r
+    JOIN site_hierarchy sh ON r.parent_id = sh.asset_id
+)
+SELECT DISTINCT h.node_id, h.node_name, h.node_type, sh.depth
+FROM site_hierarchy sh
+JOIN dataworkspace.default.dim_asset_hierarchy h ON sh.asset_id = h.node_id;
+
+● Retrieve parent and child assets.
+
+SELECT 
+    parent_id AS upstream_parent,
+    child_id AS downstream_child,
+    relationship_type
+FROM dataworkspace.default.asset_relationship
+WHERE parent_id = 'Chiller-01' OR child_id = 'Chiller-01';
+
+● Find downstream impacted assets. 
+
+WITH RECURSIVE downstream_impact AS (
+    SELECT child_id AS impacted_asset, relationship_type, 1 AS depth
+    FROM dataworkspace.default.asset_relationship
+    WHERE parent_id = 'Chiller-01'
+    
+    UNION ALL
+    
+    SELECT r.child_id, r.relationship_type, di.depth + 1
+    FROM dataworkspace.default.asset_relationship r
+    JOIN downstream_impact di ON r.parent_id = di.impacted_asset
+)
+SELECT * FROM downstream_impact;
+
+● Identify orphan assets. 
+
+SELECT h.node_id, h.node_name, h.node_type
+FROM dataworkspace.default.dim_asset_hierarchy h
+LEFT JOIN dataworkspace.default.asset_relationship r ON h.node_id = r.child_id
+WHERE r.child_id IS NULL AND h.node_type != 'SITE';
+
+● Identify disconnected assets. 
+
+SELECT h.node_id, h.node_name, h.node_type
+FROM dataworkspace.default.dim_asset_hierarchy h
+LEFT JOIN dataworkspace.default.asset_relationship r_child ON h.node_id = r_child.parent_id
+LEFT JOIN dataworkspace.default.asset_relationship r_parent ON h.node_id = r_parent.child_id
+WHERE r_child.parent_id IS NULL 
+  AND r_parent.child_id IS NULL 
+  AND h.node_type != 'SITE';
