@@ -1,0 +1,49 @@
+Build a Data Pipeline ---https://adb-7405605232295703.3.azuredatabricks.net/editor/notebooks/2263818388948004?o=7405605232295703
+
+step 1:
+
+Ingestion Layer (Raw / Bronze)
+Source: Data is loaded from Azure Data Lake Storage (ADLS Gen2 / Blob) or Unity Catalog Volumes:
+Iot telemetry.csv: Contains high-frequency operational measurements (timestamp, site_id, building_id, asset_id, sensor_id, temperature, humidity, pressure, vibration, power_consumption, operating_mode).
+Event.csv: Contains discrete alert logs (event_id, timestamp, asset_id, event_type, severity, message).
+
+functions used: PySpark reads the CSV files using .option("header", "true") and .option("inferSchema", "true") into distributed Spark DataFrames.
+
+step 2:
+
+Validation & Quality Control Layer (Silver Cleaning)
+Before processing calculations, the data is sanitized against four core criteria:
+Duplicate Handling: Drops duplicate sensor records based on [timestamp, asset_id, sensor_id] and duplicate event records based on event_id.
+Data Type Normalization: Formats timestamp strings into structured Spark SQL TIMESTAMP objects using F.to_timestamp().
+Null & Blank Value Removal: Filters out records with missing IDs (asset_id, site_id, building_id), invalid timestamp entries, or critical missing telemetry metrics (e.g., null power consumption).
+Referential Integrity: Ensures asset IDs in both datasets are non-empty and logically sound.
+
+step 3:
+
+Transforms the granular data into standardized business metrics.
+Hourly Energy Consumption & Environmental Conditions:
+Groups telemetry data into 1-hour time windows using F.date_trunc("hour", "timestamp").
+Computes total hourly energy consumed (hourly_energy_consumption_kWh = SUM(power_consumption)).
+Computes environmental averages (avg_temperature_C, avg_humidity_pct, avg_pressure_hPa, avg_vibration).
+Daily Asset Utilization:
+Groups data by calendar day (F.to_date()).
+Calculates the percentage of time an asset was operational (RUNNING / ACTIVE) versus total reporting intervals.
+
+step 4:
+
+Data Aggregation Layer (Gold Business Metrics)
+Summarizes the transformed data into a 3-level operational hierarchy:
+Asset-Level Metrics (asset_metrics):
+Summarizes lifetime/period energy consumption, overall average temperatures, and humidity per asset.
+Joins with fault_statistics so asset health and reliability can be monitored in one place.
+Building-Level Metrics (building_metrics):
+Aggregates energy usage and environment conditions at the building level.
+Calculates total active assets per building (COUNT(DISTINCT asset_id)).\
+Site-Level Metrics (site_metrics):
+High-level rollup representing facility-wide power demand, environmental conditions, total buildings, and total assets.
+
+step 5:
+
+Storage, Serving & Orchestration
+Delta / Parquet Persistence: Results are written in overwrite mode to Delta tables in Unity Catalog (dataworkspace.default.*) and Azure Blob Storage (curated/).
+Automation (Workflows): The pipeline is packaged inside a Databricks Job task that runs on a schedule (e.g., hourly/daily) using Serverless compute, ensuring the data model refreshes automatically without manual intervention.
