@@ -144,9 +144,9 @@ SELECT
     site_id,
     reading_date,
     daily_total,
-    ROUND(rolling_avg_7d, 2)                          AS baseline_avg_7d,
-    ROUND(rolling_avg_7d + 2 * rolling_stddev_7d, 2)   AS anomaly_threshold,
-    ROUND(daily_total - rolling_avg_7d, 2)             AS delta_from_baseline
+    ROUND(rolling_avg_7d, 2) AS baseline_avg_7d,
+    ROUND(rolling_avg_7d + 2 * rolling_stddev_7d, 2) AS anomaly_threshold,
+    ROUND(daily_total - rolling_avg_7d, 2) AS delta_from_baseline
 FROM rolling_stats
 WHERE rolling_avg_7d IS NOT NULL
   AND daily_total > rolling_avg_7d + 2 * rolling_stddev_7d
